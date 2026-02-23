@@ -171,6 +171,7 @@ from .models import (
     TeamInvite,
     TimeSlot,
     UserBadge,
+    UserMembership,
     VideoRequest,
     VirtualClassroom,
     VirtualClassroomCustomization,
@@ -1569,6 +1570,14 @@ def course_search(request):
             # Create a set of titles
             user_courses = {course.course.title for course in enrollments}
 
+    # Get dynamic subject choices from courses that are published
+    available_subjects = (
+        Subject.objects.filter(courses__status="published")
+        .distinct()
+        .order_by("order", "name")
+        .values_list("slug", "name")
+    )
+
     context = {
         "page_obj": page_obj,
         "query": query,
@@ -1577,7 +1586,7 @@ def course_search(request):
         "min_price": min_price,
         "max_price": max_price,
         "sort_by": sort_by,
-        "subject_choices": Course._meta.get_field("subject").choices,
+        "subject_choices": list(available_subjects),
         "level_choices": Course._meta.get_field("level").choices,
         "total_results": total_results,
         "is_teacher": is_teacher,
@@ -2754,6 +2763,10 @@ def create_cart_payment_intent(request):
     if not cart.items.exists():
         return JsonResponse({"error": "Cart is empty"}, status=400)
 
+    # Handle free cart (all items are free courses)
+    if cart.total == 0:
+        return JsonResponse({"free_cart": True, "message": "Cart contains only free items"})
+
     try:
         # Create a PaymentIntent with the cart total
         intent = stripe.PaymentIntent.create(
@@ -2768,6 +2781,86 @@ def create_cart_payment_intent(request):
         return JsonResponse({"clientSecret": intent.client_secret})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=403)
+
+
+@login_required
+def free_cart_checkout(request):
+    """Handle checkout for cart with only free items."""
+    if request.method != "POST":
+        messages.error(request, "Invalid request method.")
+        return redirect("cart_view")
+
+    cart = get_or_create_cart(request)
+
+    if not cart.items.exists():
+        messages.error(request, "Cart is empty.")
+        return redirect("cart_view")
+
+    # Verify that cart total is 0 (all items are free)
+    if cart.total != 0:
+        messages.error(request, "Cart contains paid items. Please use regular checkout.")
+        return redirect("cart_view")
+
+    user = request.user
+    enrollments = []
+    session_enrollments = []
+    goods_items = []
+
+    # Create the Order
+    order = Order.objects.create(
+        user=user,
+        total_price=0,
+        status="completed",
+        shipping_address=None,
+        terms_accepted=True,
+    )
+
+    # Process enrollments
+    for item in cart.items.all():
+        if item.course:
+            # Create enrollment for free course
+            enrollment = Enrollment.objects.create(student=user, course=item.course, status="approved")
+            enrollments.append(enrollment)
+
+            # Send notifications
+            send_enrollment_confirmation(enrollment)
+            notify_teacher_new_enrollment(enrollment)
+
+        elif item.session:
+            # Process individual session enrollments
+            session_enrollment = SessionEnrollment.objects.create(student=user, session=item.session, status="approved")
+            session_enrollments.append(session_enrollment)
+
+        elif item.goods:
+            # Free goods (price = 0)
+            goods_items.append(item)
+            OrderItem.objects.create(
+                order=order,
+                goods=item.goods,
+                quantity=1,
+                price_at_purchase=0,
+                discounted_price_at_purchase=0,
+            )
+
+    # Clear the cart
+    cart.items.all().delete()
+
+    # Render the receipt page
+    return render(
+        request,
+        "cart/receipt.html",
+        {
+            "payment_intent_id": None,
+            "order_date": timezone.now(),
+            "user": user,
+            "enrollments": enrollments,
+            "session_enrollments": session_enrollments,
+            "goods_items": goods_items,
+            "total": 0,
+            "order": order,
+            "shipping_address": None,
+        },
+    )
 
 
 def checkout_success(request):
@@ -5533,11 +5626,15 @@ def create_donation_subscription(request: HttpRequest) -> JsonResponse:
         # Create or get customer
         customer = None
         # Try to retrieve existing customer for authenticated users
-        if request.user.is_authenticated and hasattr(request.user, "stripe_customer_id"):
-            from contextlib import suppress
+        if request.user.is_authenticated:
+            try:
+                membership = request.user.membership
+                if membership.stripe_customer_id:
+                    customer = stripe.Customer.retrieve(membership.stripe_customer_id)
+            except (UserMembership.DoesNotExist, stripe.error.InvalidRequestError):
+                # No membership or invalid customer ID
+                customer = None
 
-            with suppress(stripe.error.InvalidRequestError):
-                customer = stripe.Customer.retrieve(request.user.stripe_customer_id)
         # Create new customer if needed
         if not customer:
             customer = stripe.Customer.create(
@@ -5547,8 +5644,13 @@ def create_donation_subscription(request: HttpRequest) -> JsonResponse:
                 },
             )
             if request.user.is_authenticated:
-                request.user.stripe_customer_id = customer.id
-                request.user.save()
+                # Store customer ID in user membership
+                membership, _ = UserMembership.objects.get_or_create(
+                    user=request.user, defaults={"plan_id": 1, "stripe_customer_id": customer.id}
+                )
+                if not membership.stripe_customer_id:
+                    membership.stripe_customer_id = customer.id
+                    membership.save()
 
         # Create a PaymentIntent for the first payment with setup_future_usage
         payment_intent = stripe.PaymentIntent.create(
