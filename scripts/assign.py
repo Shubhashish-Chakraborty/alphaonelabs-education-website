@@ -7,7 +7,7 @@ from datetime import datetime
 import requests
 
 
-def has_open_pr_for_issue(owner, repo, issue_number, headers):
+def has_open_pr_for_issue(owner: str, repo: str, issue_number: int, headers: dict[str, str]) -> tuple[bool, int | None]:
     """Check if an issue already has an open PR linked to it.
 
     Uses two strategies:
@@ -46,7 +46,10 @@ def has_open_pr_for_issue(owner, repo, issue_number, headers):
 
         print(f"Checking for existing open PRs linked to issue #{issue_number} via GraphQL")
         graphql_response = requests.post(
-            graphql_url, headers=graphql_headers, json={"query": query, "variables": variables}
+            graphql_url,
+            headers=graphql_headers,
+            json={"query": query, "variables": variables},
+            timeout=30,
         )
 
         if graphql_response.status_code == 200:
@@ -66,19 +69,20 @@ def has_open_pr_for_issue(owner, repo, issue_number, headers):
                     print(f"Found open PR #{pr_number} linked to issue #{issue_number} via GraphQL")
                     return True, pr_number
     except Exception as e:
-        print(f"Error checking for linked PRs via GraphQL: {str(e)}")
+        print(f"Error checking for linked PRs via GraphQL: {e!s}")
 
     # Strategy 2: REST search fallback
     try:
         search_url = "https://api.github.com/search/issues"
-        search_query = f"type:pr state:open repo:{owner}/{repo} {issue_number} in:body"
+        search_query = f"type:pr state:open repo:{owner}/{repo} #{issue_number} in:body"
         search_params = {"q": search_query}
         print(f"Checking for existing open PRs via REST search: {search_query}")
-        search_response = requests.get(search_url, headers=headers, params=search_params)
+        search_response = requests.get(search_url, headers=headers, params=search_params, timeout=30)
         search_data = search_response.json()
 
-        if search_data.get("total_count", 0) > 0:
-            pr_number = search_data.get("items", [])[0].get("number")
+        items = search_data.get("items", [])
+        if search_data.get("total_count", 0) > 0 and items:
+            pr_number = items[0].get("number")
             print(f"Found open PR #{pr_number} linked to issue #{issue_number} via REST search")
             return True, pr_number
     except Exception as e:
@@ -252,13 +256,13 @@ def main():
                 # Check if there's already an open PR linked to this issue
                 pr_exists, existing_pr_number = has_open_pr_for_issue(owner, repo, issue_number, headers)
                 if pr_exists:
-                    comment_body = (
+                    reply_body = (
                         f"@{user_login} ⚠️ This issue already has an open pull request "
                         f"(#{existing_pr_number}) linked to it. "
-                        f"Please look for other available issues to contribute to.\n\n"
+                        f"Please look for other available issues to contribute to."
                     )
                     print(f"Rejecting assignment: issue #{issue_number} already has open PR #{existing_pr_number}")
-                    requests.post(f"{issue_url}/comments", headers=headers, json={"body": comment_body})
+                    requests.post(f"{issue_url}/comments", headers=headers, json={"body": reply_body})
                     return
 
                 # Check if this is a "good first issue" and the user has existing PRs
@@ -273,7 +277,7 @@ def main():
                     search_query = f"type:pr repo:{owner}/{repo} author:{user_login}"
                     search_params = {"q": search_query}
                     print(f"Searching PRs created by user with query: {search_query}")
-                    search_response = requests.get(search_url, headers=headers, params=search_params)
+                    search_response = requests.get(search_url, headers=headers, params=search_params, timeout=30)
                     print(f"Search response status: {search_response.status_code}")
                     search_data = search_response.json()
 
@@ -312,7 +316,7 @@ def main():
                     search_query = f"type:pr state:open repo:{owner}/{repo} {assigned_issue.get('number')} in:body"
                     search_params = {"q": search_query}
                     print(f"Searching PRs with query: {search_query}")
-                    search_response = requests.get(search_url, headers=headers, params=search_params)
+                    search_response = requests.get(search_url, headers=headers, params=search_params, timeout=30)
                     print(f"Search response status: {search_response.status_code}")
                     search_data = search_response.json()
 
@@ -457,7 +461,7 @@ def main():
 
                     print(f"Checking for linked PRs via GraphQL for issue #{issue_number}")
                     graphql_response = requests.post(
-                        graphql_url, headers=graphql_headers, json={"query": query, "variables": variables}
+                        graphql_url, headers=graphql_headers, json={"query": query, "variables": variables}, timeout=30
                     )
 
                     if graphql_response.status_code == 200:
@@ -485,10 +489,10 @@ def main():
                     try:
                         # Search for PRs referencing this issue
                         search_url = "https://api.github.com/search/issues"
-                        search_query = f"type:pr state:open repo:{owner}/{repo} {issue_number} in:body"
+                        search_query = f"type:pr state:open repo:{owner}/{repo} #{issue_number} in:body"
                         search_params = {"q": search_query}
                         print(f"Searching PRs with REST API query: {search_query}")
-                        search_response = requests.get(search_url, headers=headers, params=search_params)
+                        search_response = requests.get(search_url, headers=headers, params=search_params, timeout=30)
                         search_data = search_response.json()
 
                         if search_data.get("total_count", 0) > 0:

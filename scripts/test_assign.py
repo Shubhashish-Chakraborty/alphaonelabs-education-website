@@ -88,33 +88,35 @@ class TestHasOpenPrForIssue(unittest.TestCase):
         self.assertEqual(pr_num, 101)
 
     @patch("assign.requests")
-    def test_closed_pr_ignored(self, mock_requests):
-        """GraphQL returns a CLOSED PR → should be ignored, return (False, None)."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": {
-                "repository": {
-                    "issue": {
-                        "timelineItems": {
-                            "nodes": [
-                                {
-                                    "source": {
-                                        "number": 50,
-                                        "state": "CLOSED",
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        }
-        mock_requests.post.return_value = mock_response
+    def test_graphql_non_200_falls_back_to_rest(self, mock_requests):
+        """GraphQL returns non-200 (no exception) → REST fallback is used."""
+        mock_graphql_response = MagicMock()
+        mock_graphql_response.status_code = 403
+        mock_requests.post.return_value = mock_graphql_response
 
-        # REST also returns no open PRs
         mock_rest_response = MagicMock()
-        mock_rest_response.json.return_value = {"total_count": 0, "items": []}
+        mock_rest_response.json.return_value = {
+            "total_count": 1,
+            "items": [{"number": 77}],
+        }
+        mock_requests.get.return_value = mock_rest_response
+
+        result, pr_num = has_open_pr_for_issue(self.owner, self.repo, self.issue_number, self.headers)
+
+        self.assertTrue(result)
+        self.assertEqual(pr_num, 77)
+        mock_requests.get.assert_called_once()
+
+    @patch("assign.requests")
+    def test_rest_total_count_nonzero_but_items_empty(self, mock_requests):
+        """REST reports total_count > 0 but items is empty → return (False, None) gracefully."""
+        mock_graphql_response = MagicMock()
+        mock_graphql_response.status_code = 200
+        mock_graphql_response.json.return_value = {"data": {"repository": {"issue": {"timelineItems": {"nodes": []}}}}}
+        mock_requests.post.return_value = mock_graphql_response
+
+        mock_rest_response = MagicMock()
+        mock_rest_response.json.return_value = {"total_count": 1, "items": []}
         mock_requests.get.return_value = mock_rest_response
 
         result, pr_num = has_open_pr_for_issue(self.owner, self.repo, self.issue_number, self.headers)
@@ -123,39 +125,32 @@ class TestHasOpenPrForIssue(unittest.TestCase):
         self.assertIsNone(pr_num)
 
     @patch("assign.requests")
-    def test_merged_pr_ignored(self, mock_requests):
-        """GraphQL returns a MERGED PR → should be ignored, return (False, None)."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": {
-                "repository": {
-                    "issue": {
-                        "timelineItems": {
-                            "nodes": [
-                                {
-                                    "source": {
-                                        "number": 60,
-                                        "state": "MERGED",
-                                    }
-                                }
-                            ]
+    def test_non_open_pr_ignored(self, mock_requests):
+        """GraphQL returns a CLOSED or MERGED PR → should be ignored, return (False, None)."""
+
+        for state in ("CLOSED", "MERGED"):
+            with self.subTest(state=state):
+                # Mock GraphQL response
+                mock_response = MagicMock()
+                mock_response.status_code = 200
+                mock_response.json.return_value = {
+                    "data": {
+                        "repository": {
+                            "issue": {"timelineItems": {"nodes": [{"source": {"number": 50, "state": state}}]}}
                         }
                     }
                 }
-            }
-        }
-        mock_requests.post.return_value = mock_response
+                mock_requests.post.return_value = mock_response
 
-        # REST also returns no open PRs
-        mock_rest_response = MagicMock()
-        mock_rest_response.json.return_value = {"total_count": 0, "items": []}
-        mock_requests.get.return_value = mock_rest_response
+                # Mock REST search response
+                mock_rest_response = MagicMock()
+                mock_rest_response.json.return_value = {"total_count": 0, "items": []}
+                mock_requests.get.return_value = mock_rest_response
 
-        result, pr_num = has_open_pr_for_issue(self.owner, self.repo, self.issue_number, self.headers)
+                result, pr_num = has_open_pr_for_issue(self.owner, self.repo, self.issue_number, self.headers)
 
-        self.assertFalse(result)
-        self.assertIsNone(pr_num)
+                self.assertFalse(result)
+                self.assertIsNone(pr_num)
 
     @patch("assign.requests")
     def test_both_fail_gracefully(self, mock_requests):
