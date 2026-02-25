@@ -85,6 +85,9 @@ def has_open_pr_for_issue(owner: str, repo: str, issue_number: int, headers: dic
 
             graphql_data = graphql_response.json()
 
+            if "errors" in graphql_data:
+                raise RuntimeError(f"GraphQL errors: {graphql_data['errors']}")
+
             timeline = graphql_data.get("data", {}).get("repository", {}).get("issue", {}).get("timelineItems", {})
 
             nodes = timeline.get("nodes", [])
@@ -308,7 +311,7 @@ def main():
                 try:
                     pr_exists, existing_pr_number = has_open_pr_for_issue(owner, repo, issue_number, headers)
                 except PRCheckFailedError as e:
-                    print(str(e))
+                    print(f"{e!s}")
                     requests.post(
                         f"{issue_url}/comments",
                         headers=headers,
@@ -328,7 +331,7 @@ def main():
                         f"Please look for other available issues to contribute to."
                     )
                     print(f"Rejecting assignment: issue #{issue_number} already has open PR #{existing_pr_number}")
-                    requests.post(f"{issue_url}/comments", headers=headers, json={"body": reply_body})
+                    requests.post(f"{issue_url}/comments", headers=headers, json={"body": reply_body}, timeout=30)
                     return
 
                 # Check if this is a "good first issue" and the user has existing PRs

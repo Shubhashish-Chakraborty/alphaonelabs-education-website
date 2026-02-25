@@ -4,7 +4,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from assign import has_open_pr_for_issue
+from assign import PRCheckFailedError, has_open_pr_for_issue
 
 
 class TestHasOpenPrForIssue(unittest.TestCase):
@@ -49,6 +49,48 @@ class TestHasOpenPrForIssue(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(pr_num, 99)
         # REST search should NOT be called since GraphQL found it
+        mock_requests.get.assert_not_called()
+
+    @patch("assign.requests")
+    def test_pr_found_on_second_graphql_page(self, mock_requests):
+        """Open PR is only returned on the second page of GraphQL results."""
+        page1 = MagicMock()
+        page1.status_code = 200
+        page1.json.return_value = {
+            "data": {
+                "repository": {
+                    "issue": {
+                        "timelineItems": {
+                            "pageInfo": {"hasNextPage": True, "endCursor": "cursor1"},
+                            "nodes": [{"source": {"number": 10, "state": "CLOSED"}}],
+                        }
+                    }
+                }
+            }
+        }
+
+        page2 = MagicMock()
+        page2.status_code = 200
+        page2.json.return_value = {
+            "data": {
+                "repository": {
+                    "issue": {
+                        "timelineItems": {
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                            "nodes": [{"source": {"number": 42, "state": "OPEN"}}],
+                        }
+                    }
+                }
+            }
+        }
+
+        mock_requests.post.side_effect = [page1, page2]
+
+        result, pr_num = has_open_pr_for_issue(self.owner, self.repo, self.issue_number, self.headers)
+
+        self.assertTrue(result)
+        self.assertEqual(pr_num, 42)
+        self.assertEqual(mock_requests.post.call_count, 2)
         mock_requests.get.assert_not_called()
 
     @patch("assign.requests")
@@ -160,7 +202,6 @@ class TestHasOpenPrForIssue(unittest.TestCase):
     @patch("assign.requests")
     def test_both_fail_raises_error(self, mock_requests):
         """Both GraphQL and REST fail → should raise PRCheckFailedError."""
-        from assign import PRCheckFailedError
 
         mock_requests.post.side_effect = Exception("GraphQL connection error")
         mock_requests.get.side_effect = Exception("REST connection error")
