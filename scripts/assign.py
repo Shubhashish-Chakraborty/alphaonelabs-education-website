@@ -7,6 +7,87 @@ from datetime import datetime
 import requests
 
 
+def has_open_pr_for_issue(owner, repo, issue_number, headers):
+    """Check if an issue already has an open PR linked to it.
+
+    Uses two strategies:
+    1. GraphQL - query cross-referenced events on the issue timeline
+    2. REST fallback - search for PRs mentioning the issue number in body
+
+    Returns (True, pr_number) iff an open PR is found, (False, None) if not.
+    """
+    # Strategy 1: GraphQL
+    try:
+        query = """
+            query($owner:String!, $repo:String!, $issue_number:Int!) {
+              repository(owner:$owner, name:$repo) {
+                issue(number:$issue_number) {
+                  timelineItems(itemTypes: [CROSS_REFERENCED_EVENT], first: 20) {
+                    nodes {
+                      ... on CrossReferencedEvent {
+                        source {
+                          ... on PullRequest {
+                            number
+                            state
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+        """
+
+        graphql_headers = headers.copy()
+        graphql_headers["Accept"] = "application/vnd.github.v4+json"
+        graphql_url = "https://api.github.com/graphql"
+        variables = {"owner": owner, "repo": repo, "issue_number": issue_number}
+
+        print(f"Checking for existing open PRs linked to issue #{issue_number} via GraphQL")
+        graphql_response = requests.post(
+            graphql_url, headers=graphql_headers, json={"query": query, "variables": variables}
+        )
+
+        if graphql_response.status_code == 200:
+            graphql_data = graphql_response.json()
+            timeline_items = (
+                graphql_data.get("data", {})
+                .get("repository", {})
+                .get("issue", {})
+                .get("timelineItems", {})
+                .get("nodes", [])
+            )
+
+            for item in timeline_items:
+                source = item.get("source", {})
+                if source and source.get("state") == "OPEN":
+                    pr_number = source.get("number")
+                    print(f"Found open PR #{pr_number} linked to issue #{issue_number} via GraphQL")
+                    return True, pr_number
+    except Exception as e:
+        print(f"Error checking for linked PRs via GraphQL: {str(e)}")
+
+    # Strategy 2: REST search fallback
+    try:
+        search_url = "https://api.github.com/search/issues"
+        search_query = f"type:pr state:open repo:{owner}/{repo} {issue_number} in:body"
+        search_params = {"q": search_query}
+        print(f"Checking for existing open PRs via REST search: {search_query}")
+        search_response = requests.get(search_url, headers=headers, params=search_params)
+        search_data = search_response.json()
+
+        if search_data.get("total_count", 0) > 0:
+            pr_number = search_data.get("items", [])[0].get("number")
+            print(f"Found open PR #{pr_number} linked to issue #{issue_number} via REST search")
+            return True, pr_number
+    except Exception as e:
+        print(f"Error checking for linked PRs via REST: {str(e)}")
+
+    print(f"No existing open PRs found for issue #{issue_number}")
+    return False, None
+
+
 def main():
     print("Initiating process...")
 
@@ -167,6 +248,18 @@ def main():
                     else:
                         print(f"User {user_login} is already assigned to this issue. No action needed.")
                         return
+
+                # Check if there's already an open PR linked to this issue
+                pr_exists, existing_pr_number = has_open_pr_for_issue(owner, repo, issue_number, headers)
+                if pr_exists:
+                    comment_body = (
+                        f"@{user_login} ⚠️ This issue already has an open pull request "
+                        f"(#{existing_pr_number}) linked to it. "
+                        f"Please look for other available issues to contribute to.\n\n"
+                    )
+                    print(f"Rejecting assignment: issue #{issue_number} already has open PR #{existing_pr_number}")
+                    requests.post(f"{issue_url}/comments", headers=headers, json={"body": comment_body})
+                    return
 
                 # Check if this is a "good first issue" and the user has existing PRs
                 issue_labels = issue_data.get("labels", [])
