@@ -7,15 +7,26 @@ from datetime import datetime
 import requests
 
 
+class PRCheckFailedError(RuntimeError):
+    """Raised when GitHub APIs could not be checked for existing PRs."""
+
+    pass
+
+
 def has_open_pr_for_issue(owner: str, repo: str, issue_number: int, headers: dict[str, str]) -> tuple[bool, int | None]:
     """Check if an issue already has an open PR linked to it.
 
-    Uses two strategies:
-    1. GraphQL - query cross-referenced events on the issue timeline
-    2. REST fallback - search for PRs mentioning the issue number in body
+    Returns:
+        (True, pr_number) -> open PR exists
+        (False, None) -> verified no PR exists
 
-    Returns (True, pr_number) iff an open PR is found, (False, None) if not.
+    Raises:
+        PRCheckFailedError -> unable to determine due to API failure
     """
+
+    graphql_failed = False
+    rest_failed = False
+
     # Strategy 1: GraphQL
     try:
         query = """
@@ -52,32 +63,47 @@ def has_open_pr_for_issue(owner: str, repo: str, issue_number: int, headers: dic
             timeout=30,
         )
 
-        if graphql_response.status_code == 200:
-            graphql_data = graphql_response.json()
-            timeline_items = (
-                graphql_data.get("data", {})
-                .get("repository", {})
-                .get("issue", {})
-                .get("timelineItems", {})
-                .get("nodes", [])
-            )
+        if graphql_response.status_code != 200:
+            raise RuntimeError(f"GraphQL status {graphql_response.status_code}")
 
-            for item in timeline_items:
-                source = item.get("source", {})
-                if source and source.get("state") == "OPEN":
-                    pr_number = source.get("number")
-                    print(f"Found open PR #{pr_number} linked to issue #{issue_number} via GraphQL")
-                    return True, pr_number
+        graphql_data = graphql_response.json()
+
+        timeline_items = (
+            graphql_data.get("data", {})
+            .get("repository", {})
+            .get("issue", {})
+            .get("timelineItems", {})
+            .get("nodes", [])
+        )
+
+        for item in timeline_items:
+            source = item.get("source", {})
+            if source and source.get("state") == "OPEN":
+                pr_number = source.get("number")
+                print(f"Found open PR #{pr_number} linked to issue #{issue_number} via GraphQL")
+                return True, pr_number
+
     except Exception as e:
         print(f"Error checking for linked PRs via GraphQL: {e!s}")
+        graphql_failed = True
 
     # Strategy 2: REST search fallback
     try:
         search_url = "https://api.github.com/search/issues"
         search_query = f"type:pr state:open repo:{owner}/{repo} #{issue_number} in:body"
         search_params = {"q": search_query}
+
         print(f"Checking for existing open PRs via REST search: {search_query}")
-        search_response = requests.get(search_url, headers=headers, params=search_params, timeout=30)
+        search_response = requests.get(
+            search_url,
+            headers=headers,
+            params=search_params,
+            timeout=30,
+        )
+
+        if search_response.status_code != 200:
+            raise RuntimeError(f"REST search status {search_response.status_code}")
+
         search_data = search_response.json()
 
         items = search_data.get("items", [])
@@ -85,8 +111,14 @@ def has_open_pr_for_issue(owner: str, repo: str, issue_number: int, headers: dic
             pr_number = items[0].get("number")
             print(f"Found open PR #{pr_number} linked to issue #{issue_number} via REST search")
             return True, pr_number
+
     except Exception as e:
         print(f"Error checking for linked PRs via REST: {e!s}")
+        rest_failed = True
+
+    # If BOTH methods failed → critical
+    if graphql_failed and rest_failed:
+        raise PRCheckFailedError(f"Unable to verify existing PRs for issue #{issue_number} due to GitHub API failure")
 
     print(f"No existing open PRs found for issue #{issue_number}")
     return False, None
@@ -254,7 +286,22 @@ def main():
                         return
 
                 # Check if there's already an open PR linked to this issue
-                pr_exists, existing_pr_number = has_open_pr_for_issue(owner, repo, issue_number, headers)
+                try:
+                    pr_exists, existing_pr_number = has_open_pr_for_issue(owner, repo, issue_number, headers)
+                except PRCheckFailedError as e:
+                    print(str(e))
+                    requests.post(
+                        f"{issue_url}/comments",
+                        headers=headers,
+                        json={
+                            "body": (
+                                f"@{user_login} ⚠️ I couldn't verify whether this issue already has an open PR "
+                                "due to a GitHub API error. Please try again later."
+                            )
+                        },
+                        timeout=30,
+                    )
+                    return
                 if pr_exists:
                     reply_body = (
                         f"@{user_login} ⚠️ This issue already has an open pull request "
@@ -363,6 +410,7 @@ def main():
                     f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/comments",
                     headers=headers,
                     json={"body": assignment_msg},
+                    timeout=30,
                 )
                 if comment_response.status_code >= 400:
                     print(f"Error posting comment: {comment_response.status_code} - {comment_response.text}")

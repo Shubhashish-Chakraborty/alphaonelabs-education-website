@@ -61,6 +61,7 @@ class TestHasOpenPrForIssue(unittest.TestCase):
         mock_requests.post.return_value = mock_graphql_response
 
         mock_rest_response = MagicMock()
+        mock_rest_response.status_code = 200
         mock_rest_response.json.return_value = {"total_count": 0, "items": []}
         mock_requests.get.return_value = mock_rest_response
 
@@ -76,6 +77,7 @@ class TestHasOpenPrForIssue(unittest.TestCase):
 
         # REST finds a PR
         mock_rest_response = MagicMock()
+        mock_rest_response.status_code = 200
         mock_rest_response.json.return_value = {
             "total_count": 1,
             "items": [{"number": 101}],
@@ -95,6 +97,7 @@ class TestHasOpenPrForIssue(unittest.TestCase):
         mock_requests.post.return_value = mock_graphql_response
 
         mock_rest_response = MagicMock()
+        mock_rest_response.status_code = 200
         mock_rest_response.json.return_value = {
             "total_count": 1,
             "items": [{"number": 77}],
@@ -144,6 +147,7 @@ class TestHasOpenPrForIssue(unittest.TestCase):
 
                 # Mock REST search response
                 mock_rest_response = MagicMock()
+                mock_rest_response.status_code = 200
                 mock_rest_response.json.return_value = {"total_count": 0, "items": []}
                 mock_requests.get.return_value = mock_rest_response
 
@@ -153,15 +157,15 @@ class TestHasOpenPrForIssue(unittest.TestCase):
                 self.assertIsNone(pr_num)
 
     @patch("assign.requests")
-    def test_both_fail_gracefully(self, mock_requests):
-        """Both GraphQL and REST fail → return (False, None) without crashing."""
+    def test_both_fail_raises_error(self, mock_requests):
+        """Both GraphQL and REST fail → should raise PRCheckFailedError."""
+        from assign import PRCheckFailedError
+
         mock_requests.post.side_effect = Exception("GraphQL connection error")
         mock_requests.get.side_effect = Exception("REST connection error")
 
-        result, pr_num = has_open_pr_for_issue(self.owner, self.repo, self.issue_number, self.headers)
-
-        self.assertFalse(result)
-        self.assertIsNone(pr_num)
+        with self.assertRaises(PRCheckFailedError):
+            has_open_pr_for_issue(self.owner, self.repo, self.issue_number, self.headers)
 
 
 if __name__ == "__main__":
