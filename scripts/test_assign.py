@@ -119,6 +119,7 @@ class TestHasOpenPrForIssue(unittest.TestCase):
         mock_requests.post.return_value = mock_graphql_response
 
         mock_rest_response = MagicMock()
+        mock_rest_response.status_code = 200
         mock_rest_response.json.return_value = {"total_count": 1, "items": []}
         mock_requests.get.return_value = mock_rest_response
 

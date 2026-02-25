@@ -10,8 +10,6 @@ import requests
 class PRCheckFailedError(RuntimeError):
     """Raised when GitHub APIs could not be checked for existing PRs."""
 
-    pass
-
 
 def has_open_pr_for_issue(owner: str, repo: str, issue_number: int, headers: dict[str, str]) -> tuple[bool, int | None]:
     """Check if an issue already has an open PR linked to it.
@@ -27,61 +25,82 @@ def has_open_pr_for_issue(owner: str, repo: str, issue_number: int, headers: dic
     graphql_failed = False
     rest_failed = False
 
-    # Strategy 1: GraphQL
+    # Strategy 1: GraphQL (WITH PAGINATION)
     try:
-        query = """
-            query($owner:String!, $repo:String!, $issue_number:Int!) {
-              repository(owner:$owner, name:$repo) {
-                issue(number:$issue_number) {
-                  timelineItems(itemTypes: [CROSS_REFERENCED_EVENT], first: 20) {
-                    nodes {
-                      ... on CrossReferencedEvent {
-                        source {
-                          ... on PullRequest {
-                            number
-                            state
+        graphql_headers = headers.copy()
+        graphql_headers["Accept"] = "application/vnd.github.v4+json"
+        graphql_url = "https://api.github.com/graphql"
+
+        has_next_page = True
+        cursor = None
+
+        print(f"Checking for existing open PRs linked to issue #{issue_number} via GraphQL")
+
+        while has_next_page:
+            query = """
+                query($owner:String!, $repo:String!, $issue_number:Int!, $cursor:String) {
+                  repository(owner:$owner, name:$repo) {
+                    issue(number:$issue_number) {
+                      timelineItems(
+                        itemTypes: [CROSS_REFERENCED_EVENT],
+                        first: 100,
+                        after: $cursor
+                      ) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          ... on CrossReferencedEvent {
+                            source {
+                              ... on PullRequest {
+                                number
+                                state
+                              }
+                            }
                           }
                         }
                       }
                     }
                   }
                 }
-              }
+            """
+
+            variables = {
+                "owner": owner,
+                "repo": repo,
+                "issue_number": issue_number,
+                "cursor": cursor,
             }
-        """
 
-        graphql_headers = headers.copy()
-        graphql_headers["Accept"] = "application/vnd.github.v4+json"
-        graphql_url = "https://api.github.com/graphql"
-        variables = {"owner": owner, "repo": repo, "issue_number": issue_number}
+            graphql_response = requests.post(
+                graphql_url,
+                headers=graphql_headers,
+                json={"query": query, "variables": variables},
+                timeout=30,
+            )
 
-        print(f"Checking for existing open PRs linked to issue #{issue_number} via GraphQL")
-        graphql_response = requests.post(
-            graphql_url,
-            headers=graphql_headers,
-            json={"query": query, "variables": variables},
-            timeout=30,
-        )
+            if graphql_response.status_code != 200:
+                raise RuntimeError(f"GraphQL status {graphql_response.status_code}")
 
-        if graphql_response.status_code != 200:
-            raise RuntimeError(f"GraphQL status {graphql_response.status_code}")
+            graphql_data = graphql_response.json()
 
-        graphql_data = graphql_response.json()
+            timeline = graphql_data.get("data", {}).get("repository", {}).get("issue", {}).get("timelineItems", {})
 
-        timeline_items = (
-            graphql_data.get("data", {})
-            .get("repository", {})
-            .get("issue", {})
-            .get("timelineItems", {})
-            .get("nodes", [])
-        )
+            nodes = timeline.get("nodes", [])
+            page_info = timeline.get("pageInfo", {})
 
-        for item in timeline_items:
-            source = item.get("source", {})
-            if source and source.get("state") == "OPEN":
-                pr_number = source.get("number")
-                print(f"Found open PR #{pr_number} linked to issue #{issue_number} via GraphQL")
-                return True, pr_number
+            # Check PRs in THIS PAGE
+            for item in nodes:
+                source = item.get("source", {})
+                if source and source.get("state") == "OPEN":
+                    pr_number = source.get("number")
+                    print(f"Found open PR #{pr_number} linked to issue #{issue_number} via GraphQL")
+                    return True, pr_number
+
+            # Pagination control
+            has_next_page = page_info.get("hasNextPage", False)
+            cursor = page_info.get("endCursor")
 
     except Exception as e:
         print(f"Error checking for linked PRs via GraphQL: {e!s}")
