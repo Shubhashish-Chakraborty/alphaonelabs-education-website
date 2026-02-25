@@ -86,7 +86,7 @@ def has_open_pr_for_issue(owner: str, repo: str, issue_number: int, headers: dic
             print(f"Found open PR #{pr_number} linked to issue #{issue_number} via REST search")
             return True, pr_number
     except Exception as e:
-        print(f"Error checking for linked PRs via REST: {str(e)}")
+        print(f"Error checking for linked PRs via REST: {e!s}")
 
     print(f"No existing open PRs found for issue #{issue_number}")
     return False, None
@@ -495,8 +495,9 @@ def main():
                         search_response = requests.get(search_url, headers=headers, params=search_params, timeout=30)
                         search_data = search_response.json()
 
-                        if search_data.get("total_count", 0) > 0:
-                            pr_number = search_data.get("items", [])[0].get("number")
+                        items = search_data.get("items", [])
+                        if search_data.get("total_count", 0) > 0 and items:
+                            pr_number = items[0].get("number")
                             print(f"Found open PR #{pr_number} linked to issue #{issue_number} via REST API search")
                             has_linked_pr = True
                     except Exception as e:
