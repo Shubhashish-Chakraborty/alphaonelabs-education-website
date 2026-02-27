@@ -4625,6 +4625,43 @@ def add_meme(request):
 
 
 @login_required
+def update_meme(request, slug):
+    meme = get_object_or_404(Meme, slug=slug)
+    if not meme.uploader or meme.uploader.id != request.user.id:
+        return HttpResponseForbidden("You do not have permission to edit this meme.")
+
+    from .forms import MemeEditForm
+
+    if request.method == "POST":
+        form = MemeEditForm(request.POST, instance=meme)
+        if form.is_valid():
+            meme_obj = form.save(commit=False)
+            meme_obj.image = meme.image
+            meme_obj.save()
+            messages.success(request, "Meme updated successfully.")
+            return redirect("meme_detail", slug=meme.slug)
+    else:
+        form = MemeEditForm(instance=meme)
+
+    subjects = Subject.objects.all().order_by("name")
+    return render(request, "add_meme.html", {"form": form, "subjects": subjects, "is_edit": True})
+
+
+@login_required
+def delete_meme(request, slug):
+    meme = get_object_or_404(Meme, slug=slug)
+    if not meme.uploader or meme.uploader.id != request.user.id:
+        return HttpResponseForbidden("You do not have permission to delete this meme.")
+
+    if request.method == "POST":
+        meme.delete()
+        messages.success(request, "Meme deleted successfully.")
+        return redirect("meme_list")
+
+    return render(request, "meme_detail.html", {"meme": meme})
+
+
+@login_required
 def team_goals(request):
     """List all team goals the user is part of or has created."""
     user_goals = (

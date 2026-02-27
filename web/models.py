@@ -1765,7 +1765,7 @@ class TeamInvite(models.Model):
 def validate_image_size(image):
     """Validate that the image file is not too large."""
     file_size = image.size
-    limit_mb = 2
+    limit_mb = 1
     if file_size > limit_mb * 1024 * 1024:
         raise ValidationError(f"Image file is too large. Size should not exceed {limit_mb} MB.")
 
