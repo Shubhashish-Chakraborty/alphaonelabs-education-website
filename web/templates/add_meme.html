@@ -127,21 +127,22 @@
       }
       // Wire up image preview for add mode only
       const imageInput = document.getElementById('{{ form.image.id_for_label }}');
-      imageInput.addEventListener('change', function(e) {
-          const preview = document.getElementById('preview');
-          const previewContainer = document.getElementById('imagePreview');
-          if (this.files && this.files[0]) {
-              const reader = new FileReader();
-              reader.onload = function(e) {
-                  preview.src = e.target.result;
-                  previewContainer.classList.remove('hidden');
+      if (imageInput) {
+          imageInput.addEventListener('change', function(e) {
+              const preview = document.getElementById('preview');
+              const previewContainer = document.getElementById('imagePreview');
+              if (this.files && this.files[0]) {
+                  const reader = new FileReader();
+                  reader.onload = function(e) {
+                      preview.src = e.target.result;
+                      previewContainer.classList.remove('hidden');
+                  }
+                  reader.readAsDataURL(this.files[0]);
+              } else {
+                  previewContainer.classList.add('hidden');
               }
-              reader.readAsDataURL(this.files[0]);
-          } else {
-              previewContainer.classList.add('hidden');
-          }
-      });
-      {
+          });
+      } {
           %
           endif %
       }
