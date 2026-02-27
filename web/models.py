@@ -1794,7 +1794,7 @@ class Meme(models.Model):
     image = models.ImageField(
         upload_to="memes/",
         validators=[validate_image_size, validate_image_extension],
-        help_text=_("Upload a meme image (JPG, PNG, or GIF, max 2MB)"),
+        help_text=_("Upload a meme image (JPG, PNG, or GIF, max 1MB)"),
     )
     uploader = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name="memes", null=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -9,7 +9,7 @@
 {% endblock title %}
 {% block content %}
   <div class="container mx-auto mt-8 mb-16 px-4 max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+    <h1 class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-300">
       {% if is_edit %}
         Edit
       {% else %}
@@ -54,7 +54,7 @@
           <label for="{{ form.new_subject.id_for_label }}"
                  class="block mb-2 font-medium">
             Or create new subject
-            {% if form.new_subject.field.required %}<span class="text-red-500">*</span>{% endif %}
+            {% if form.new_subject.field.required %}<span class="text-red-600">*</span>{% endif %}
           </label>
           <input type="text"
                  name="{{ form.new_subject.name }}"
@@ -66,7 +66,7 @@
         <div>
           <label for="{{ form.caption.id_for_label }}" class="block mb-2 font-medium">
             Caption
-            {% if form.caption.field.required %}<span class="text-red-500">*</span>{% endif %}
+            {% if form.caption.field.required %}<span class="text-red-600">*</span>{% endif %}
           </label>
           <textarea name="{{ form.caption.name }}"
                     id="{{ form.caption.id_for_label }}"
