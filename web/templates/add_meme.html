@@ -121,10 +121,7 @@
     </div>
   </div>
   <script>
-      {
-          %
-          if not is_edit %
-      }
+      {% if not is_edit %}
       // Wire up image preview for add mode only
       const imageInput = document.getElementById('{{ form.image.id_for_label }}');
       if (imageInput) {
@@ -142,10 +139,8 @@
                   previewContainer.classList.add('hidden');
               }
           });
-      } {
-          %
-          endif %
-      }
+        }
+        {% endif %}
       const subjectField = document.getElementById('{{ form.subject.id_for_label }}');
       const newSubjectField = document.getElementById('{{ form.new_subject.id_for_label }}');
       subjectField.addEventListener('change', function() {
