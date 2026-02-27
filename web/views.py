@@ -4590,6 +4590,13 @@ def graphing_calculator(request):
     return render(request, "graphing_calculator.html")
 
 
+def check_meme_owner(meme, user):
+    """Return HttpResponseForbidden if user is not the meme owner, else None."""
+    if not meme.uploader or meme.uploader.id != user.id:
+        return HttpResponseForbidden("You do not have permission to modify this meme.")
+    return None
+
+
 def meme_list(request):
     memes = Meme.objects.all().order_by("-created_at")
     subjects = Subject.objects.filter(memes__isnull=False).distinct()
@@ -4626,10 +4633,12 @@ def add_meme(request):
 
 
 @login_required
-def update_meme(request, slug):
+def update_meme(request: HttpRequest, slug: str) -> HttpResponse:
+    """Edit meme metadata for the uploader while keeping the image immutable."""
     meme = get_object_or_404(Meme, slug=slug)
-    if not meme.uploader or meme.uploader.id != request.user.id:
-        return HttpResponseForbidden("You do not have permission to edit this meme.")
+    forbidden = check_meme_owner(meme, request.user)
+    if forbidden:
+        return forbidden
 
     from .forms import MemeEditForm
 
@@ -4649,10 +4658,12 @@ def update_meme(request, slug):
 
 
 @login_required
-def delete_meme(request, slug):
+def delete_meme(request: HttpRequest, slug: str) -> HttpResponse:
+    """Delete a meme owned by the current user."""
     meme = get_object_or_404(Meme, slug=slug)
-    if not meme.uploader or meme.uploader.id != request.user.id:
-        return HttpResponseForbidden("You do not have permission to delete this meme.")
+    forbidden = check_meme_owner(meme, request.user)
+    if forbidden:
+        return forbidden
 
     if request.method == "POST":
         meme.delete()

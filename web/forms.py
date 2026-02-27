@@ -1727,6 +1727,9 @@ class MemeForm(forms.ModelForm):
         if not image:
             return image
 
+        if self.instance and self.instance.pk:
+            raise ValidationError("Uploaded image cannot be replaced after upload.")
+
         limit_mb = 1
         if image.size > limit_mb * 1024 * 1024:
             raise ValidationError(f"Image file is too large. Size should not exceed {limit_mb} MB.")
@@ -1752,10 +1755,12 @@ class MemeForm(forms.ModelForm):
 
 # Form used during updates, image may not be changed by users
 class MemeEditForm(MemeForm):
-    class Meta(MemeForm.Meta):
-        fields = [f for f in MemeForm.Meta.fields if f != "image"]
+    """Form used during meme updates; uploaded image is immutable."""
 
-    def __init__(self, *args, **kwargs):
+    class Meta(MemeForm.Meta):
+        fields = tuple(f for f in MemeForm.Meta.fields if f != "image")
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         # ensure image field is not present
         self.fields.pop("image", None)

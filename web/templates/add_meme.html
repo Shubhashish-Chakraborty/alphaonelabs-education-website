@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 
 {% block title %}
-  Add Educational Meme
+  {% if is_edit %}
+    Edit Educational Meme
+  {% else %}
+    Add Educational Meme
+  {% endif %}
 {% endblock title %}
 {% block content %}
   <div class="container mx-auto mt-8 mb-16 px-4 max-w-2xl">
@@ -19,7 +23,7 @@
         <div>
           <label for="{{ form.title.id_for_label }}" class="block mb-2 font-medium">
             Title
-            {% if form.title.field.required %}<span class="text-red-500">*</span>{% endif %}
+            {% if form.title.field.required %}<span class="text-red-600">*</span>{% endif %}
           </label>
           <input type="text"
                  name="{{ form.title.name }}"
@@ -32,7 +36,7 @@
         <div>
           <label for="{{ form.subject.id_for_label }}" class="block mb-2 font-medium">
             Subject
-            {% if form.subject.field.required %}<span class="text-red-500">*</span>{% endif %}
+            {% if form.subject.field.required %}<span class="text-red-600">*</span>{% endif %}
           </label>
           <select name="{{ form.subject.name }}"
                   id="{{ form.subject.id_for_label }}"
@@ -101,7 +105,7 @@
         {% endif %}
         <div class="pt-4">
           <button type="submit"
-                  class="bg-teal-600 hover:bg-teal-700 text-white py-2 px-6 rounded-lg">
+                  class="bg-teal-300 hover:bg-teal-400 text-white py-2 px-6 rounded-lg transition duration-200">
             {% if is_edit %}
               Save Changes
             {% else %}
