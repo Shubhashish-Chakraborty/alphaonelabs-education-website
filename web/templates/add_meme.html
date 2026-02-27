@@ -9,7 +9,7 @@
 {% endblock title %}
 {% block content %}
   <div class="container mx-auto mt-8 mb-16 px-4 max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6">
+    <h1 class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
       {% if is_edit %}
         Edit
       {% else %}
@@ -78,7 +78,7 @@
           <div>
             <label for="{{ form.image.id_for_label }}" class="block mb-2 font-medium">
               Meme Image
-              {% if form.image.field.required %}<span class="text-red-500">*</span>{% endif %}
+              {% if form.image.field.required %}<span class="text-red-600">*</span>{% endif %}
             </label>
             {{ form.image }}
             {% if form.image.errors %}<p class="text-red-500 text-sm mt-1">{{ form.image.errors.0 }}</p>{% endif %}
@@ -90,6 +90,8 @@
                 <img id="preview"
                      src=""
                      alt="Preview"
+                     width="400"
+                     height="256"
                      class="max-h-64 max-w-full object-contain" />
               </div>
               <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
@@ -119,34 +121,37 @@
     </div>
   </div>
   <script>
-      // only wire up image preview if the file input is present (not on edit forms)
+      {
+          %
+          if not is_edit %
+      }
+      // Wire up image preview for add mode only
       const imageInput = document.getElementById('{{ form.image.id_for_label }}');
-      if (imageInput) {
-          imageInput.addEventListener('change', function(e) {
-              const preview = document.getElementById('preview');
-              const previewContainer = document.getElementById('imagePreview');
-
-              if (this.files && this.files[0]) {
-                  const reader = new FileReader();
-                  reader.onload = function(e) {
-                      preview.src = e.target.result;
-                      previewContainer.classList.remove('hidden');
-                  }
-                  reader.readAsDataURL(this.files[0]);
-              } else {
-                  previewContainer.classList.add('hidden');
+      imageInput.addEventListener('change', function(e) {
+          const preview = document.getElementById('preview');
+          const previewContainer = document.getElementById('imagePreview');
+          if (this.files && this.files[0]) {
+              const reader = new FileReader();
+              reader.onload = function(e) {
+                  preview.src = e.target.result;
+                  previewContainer.classList.remove('hidden');
               }
-          });
+              reader.readAsDataURL(this.files[0]);
+          } else {
+              previewContainer.classList.add('hidden');
+          }
+      });
+      {
+          %
+          endif %
       }
       const subjectField = document.getElementById('{{ form.subject.id_for_label }}');
       const newSubjectField = document.getElementById('{{ form.new_subject.id_for_label }}');
-
       subjectField.addEventListener('change', function() {
           if (this.value) {
               newSubjectField.value = '';
           }
       });
-
       newSubjectField.addEventListener('input', function() {
           if (this.value.trim()) {
               subjectField.selectedIndex = 0;

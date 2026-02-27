@@ -1703,7 +1703,7 @@ class MemeForm(forms.ModelForm):
         # When editing an existing meme, the image should not be required.
         if self.instance and self.instance.pk and "image" in self.fields:
             self.fields["image"].required = False
-            self.fields["image"].widget.attrs["help_text"] = "Upload a new image to replace the current one (optional)"
+            # Image field is excluded from MemeEditForm; this branch exists only for defensive coverage
 
         if "image" in self.fields:
             self.fields["image"].error_messages = {

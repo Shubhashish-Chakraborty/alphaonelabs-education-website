@@ -4590,7 +4590,7 @@ def graphing_calculator(request):
     return render(request, "graphing_calculator.html")
 
 
-def check_meme_owner(meme, user):
+def check_meme_owner(meme: Meme, user: User) -> HttpResponseForbidden | None:
     """Return HttpResponseForbidden if user is not the meme owner, else None."""
     if not meme.uploader or meme.uploader.id != user.id:
         return HttpResponseForbidden("You do not have permission to modify this meme.")
@@ -4658,19 +4658,16 @@ def update_meme(request: HttpRequest, slug: str) -> HttpResponse:
 
 
 @login_required
+@require_POST
 def delete_meme(request: HttpRequest, slug: str) -> HttpResponse:
     """Delete a meme owned by the current user."""
     meme = get_object_or_404(Meme, slug=slug)
     forbidden = check_meme_owner(meme, request.user)
     if forbidden:
         return forbidden
-
-    if request.method == "POST":
-        meme.delete()
-        messages.success(request, "Meme deleted successfully.")
-        return redirect("meme_list")
-
-    return render(request, "meme_detail.html", {"meme": meme})
+    meme.delete()
+    messages.success(request, "Meme deleted successfully.")
+    return redirect("meme_list")
 
 
 @login_required
