@@ -21,7 +21,7 @@
       <form method="post" enctype="multipart/form-data" class="space-y-4">
         {% csrf_token %}
         <div>
-          <label for="{{ form.title.id_for_label }}" class="block mb-2 font-medium">
+          <label for="{{ form.title.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
             Title
             {% if form.title.field.required %}<span class="text-red-600">*</span>{% endif %}
           </label>
