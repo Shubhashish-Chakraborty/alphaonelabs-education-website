@@ -72,7 +72,7 @@
                     id="{{ form.caption.id_for_label }}"
                     class="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
                     {% if form.caption.required %}required{% endif %}>{{ form.caption.value|default:'' }}</textarea>
-          {% if form.caption.errors %}<p class="text-red-500 text-sm mt-1">{{ form.caption.errors.0 }}</p>{% endif %}
+          {% if form.caption.errors %}<p class="text-red-600 text-sm mt-1">{{ form.caption.errors.0 }}</p>{% endif %}
         </div>
         {% if not is_edit %}
           <div>
@@ -81,8 +81,8 @@
               {% if form.image.field.required %}<span class="text-red-600">*</span>{% endif %}
             </label>
             {{ form.image }}
-            {% if form.image.errors %}<p class="text-red-500 text-sm mt-1">{{ form.image.errors.0 }}</p>{% endif %}
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Recommended: PNG or JPEG, max 1MB</p>
+            {% if form.image.errors %}<p class="text-red-600 text-sm mt-1">{{ form.image.errors.0 }}</p>{% endif %}
+            <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Recommended: PNG or JPEG, max 1MB</p>
             <div id="imagePreview"
                  class="hidden mt-4 border rounded p-4 dark:border-gray-600">
               <p class="text-sm font-medium mb-2">Image Preview:</p>
@@ -94,7 +94,7 @@
                      height="256"
                      class="max-h-64 max-w-full object-contain" />
               </div>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
+              <p class="text-xs text-gray-600 dark:text-gray-300 mt-2 text-center">
                 Preview is for reference only and may appear differently on the site.
               </p>
             </div>
