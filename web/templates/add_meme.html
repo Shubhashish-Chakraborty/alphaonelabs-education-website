@@ -31,7 +31,7 @@
                  value="{{ form.title.value|default:'' }}"
                  class="w-full p-2 border rounded dark:bg-gray-700 dark:text-white dark:border-gray-600"
                  {% if form.title.required %}required{% endif %} />
-          {% if form.title.errors %}<p class="text-red-500 text-sm mt-1">{{ form.title.errors.0 }}</p>{% endif %}
+          {% if form.title.errors %}<p class="text-red-600 text-sm mt-1">{{ form.title.errors.0 }}</p>{% endif %}
         </div>
         <div>
           <label for="{{ form.subject.id_for_label }}" class="block mb-2 font-medium">
@@ -47,7 +47,7 @@
                       {% if form.subject.value == value %}selected{% endif %}>{{ text }}</option>
             {% endfor %}
           </select>
-          {% if form.subject.errors %}<p class="text-red-500 text-sm mt-1">{{ form.subject.errors.0 }}</p>{% endif %}
+          {% if form.subject.errors %}<p class="text-red-600 text-sm mt-1">{{ form.subject.errors.0 }}</p>{% endif %}
           <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ form.subject.help_text }}</p>
         </div>
         <div>
