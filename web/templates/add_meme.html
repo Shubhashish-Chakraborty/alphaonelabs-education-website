@@ -21,7 +21,8 @@
       <form method="post" enctype="multipart/form-data" class="space-y-4">
         {% csrf_token %}
         <div>
-          <label for="{{ form.title.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label for="{{ form.title.id_for_label }}"
+                 class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
             Title
             {% if form.title.field.required %}<span class="text-red-600">*</span>{% endif %}
           </label>
@@ -150,8 +151,8 @@
                   previewContainer.classList.add('hidden');
               }
           });
-        }
-        {% endif %}
+      }
+      {% endif %}
       const subjectField = document.getElementById('{{ form.subject.id_for_label }}');
       const newSubjectField = document.getElementById('{{ form.new_subject.id_for_label }}');
       subjectField.addEventListener('change', function() {
